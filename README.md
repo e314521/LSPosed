@@ -2,6 +2,7 @@
 安装 ndk/26.1.10909125
 安装 jdk 17
 安装 android sdk 34
+安装 cmake
 
  ~/.gradle/gradle.properties 添加
 ``` 
@@ -28,7 +29,13 @@ git checkout 100
 ```
 
 
-生成文件
+生成全部文件
 ```
 ./gradlew zipall
 ```
+
+生成面具文件
+./gradlew flashMagiskAndRebootZygiskRelease
+
+生成ksu文件
+./gradlew flashKsuAndRebootZygiskRelease

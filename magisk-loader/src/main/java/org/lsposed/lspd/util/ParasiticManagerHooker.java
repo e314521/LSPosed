@@ -13,6 +13,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
+import android.content.res.CompatibilityInfo;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -102,6 +103,7 @@ public class ParasiticManagerHooker {
     }
 
     private static void hookForManager(ILSPManagerService managerService) {
+        var unhooks = new XC_MethodHook.Unhook[]{null,null};
         var managerApkHooker = new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) {
@@ -109,22 +111,39 @@ public class ParasiticManagerHooker {
                 Object bindData = param.args[0];
                 ApplicationInfo appInfo = (ApplicationInfo) XposedHelpers.getObjectField(bindData, "appInfo");
                 XposedHelpers.setObjectField(bindData, "appInfo", getManagerPkgInfo(appInfo).applicationInfo);
+
             }
         };
-        XposedHelpers.findAndHookMethod(ActivityThread.class,
+        unhooks[0] = XposedHelpers.findAndHookMethod(ActivityThread.class,
                 "handleBindApplication",
                 "android.app.ActivityThread$AppBindData",
                 managerApkHooker);
 
-        var unhooks = new XC_MethodHook.Unhook[]{null};
-        unhooks[0] = XposedHelpers.findAndHookMethod(
+        XposedHelpers.findAndHookMethod(ActivityThread.class,
+                "getPackageInfoNoCheck",
+                ApplicationInfo.class,
+                CompatibilityInfo.class,
+                new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        Hookers.logD("getPackageInfoNoCheck beforeHookedMethod");
+                        var pkgInfo = getManagerPkgInfo(null);
+                        if (pkgInfo == null){
+                            var managerPackageInfo = getManagerPkgInfo((ApplicationInfo)param.args[0]);
+                            param.args[0] = managerPackageInfo.applicationInfo;
+                            unhooks[0].unhook();
+                        }
+                    }
+                });
+
+        unhooks[1] = XposedHelpers.findAndHookMethod(
                 LoadedApk.class, "getClassLoader", new XC_MethodHook() {
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) {
                         var pkgInfo = getManagerPkgInfo(null);
                         if (pkgInfo != null && XposedHelpers.getObjectField(param.thisObject, "mApplicationInfo") == pkgInfo.applicationInfo) {
                             sendBinderToManager((ClassLoader) param.getResult(), managerService.asBinder());
-                            unhooks[0].unhook();
+                            unhooks[1].unhook();
                         }
                     }
                 });
